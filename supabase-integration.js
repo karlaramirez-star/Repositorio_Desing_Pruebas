@@ -1312,13 +1312,36 @@
       applyPanelPermissions();
     };
   }
-  const originalRenderAdmin = window.renderAdmin;
-  if (typeof originalRenderAdmin === 'function') {
-    window.renderAdmin = function renderAdminWithPermissions() {
-      originalRenderAdmin();
-      applyPanelPermissions();
-    };
-  }
+ const originalRenderAdmin = window.renderAdmin;
+
+if (typeof originalRenderAdmin === 'function') {
+  window.renderAdmin = function renderAdminWithPermissions() {
+
+    // Identificar la sección que estaba seleccionada.
+    const activeNav = document.querySelector(
+      '.admin-sidebar .sidebar-item.active[id^="sb-"]'
+    );
+
+    const activeSection = activeNav
+      ? activeNav.id.replace(/^sb-/, '')
+      : null;
+
+    // Ejecutar la inicialización original.
+    originalRenderAdmin();
+
+    // Recuperar la sección anterior en lugar de dejar Plantillas.
+    if (
+      activeSection &&
+      activeSection !== 'plantillas' &&
+      typeof originalAdminSec === 'function' &&
+      canUseAdminSection(activeSection)
+    ) {
+      originalAdminSec(activeSection);
+    }
+
+    applyPanelPermissions();
+  };
+}
 
   // ── 11. Start-up ────────────────────────────────────────────────────────────
   function hideLegacyAdminPasswordLogin() {

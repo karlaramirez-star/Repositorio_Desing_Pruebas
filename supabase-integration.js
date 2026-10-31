@@ -1284,13 +1284,25 @@
 
   window.renderAdminLogs = function renderAdminLogs() {
     const sec = $('admin-sec-logs'); if (!sec) return;
+    // Keep focus and cursor position in the search box across re-renders.
+    const prevSearch = $('logs-search');
+    const hadFocus = !!prevSearch && document.activeElement === prevSearch;
+    const selStart = hadFocus ? prevSearch.selectionStart : null;
+    const selEnd = hadFocus ? prevSearch.selectionEnd : null;
     const list = (logs || []).filter((row) => [row.nombre,row.email,row.plantillaNombre,row.area,row.modulo,row.accion].join(' ').toLowerCase().includes(String(logsBusq || '').toLowerCase()));
     sec.innerHTML = '<div class="stats-row"><div class="stat-card"><div class="stat-label">Total de actividades</div><div class="stat-val">' + list.length + '</div></div>' +
       '<div class="stat-card"><div class="stat-label">Usuarios únicos</div><div class="stat-val">' + new Set(list.map((row) => row.email)).size + '</div></div></div>' +
-      '<div class="section-head"><h2>Historial de actividades</h2><input value="' + safeText(logsBusq || '') + '" oninput="logsBusq=this.value;renderAdminLogs()" placeholder="Buscar..." style="width:220px"/></div>' +
+      '<div class="section-head"><h2>Historial de actividades</h2><input id="logs-search" value="' + safeText(logsBusq || '') + '" oninput="logsBusq=this.value;logsPage=1;renderAdminLogs()" placeholder="Buscar..." style="width:220px"/></div>' +
       '<table><thead><tr><th>Usuario</th><th>Correo</th><th>Departamento</th><th>Módulo</th><th>Acción</th><th>Fecha y hora</th></tr></thead><tbody>' +
       list.map((row) => '<tr><td class="td-name">' + safeText(row.nombre) + '</td><td>' + safeText(row.email) + '</td><td>' + safeText(row.area) + '</td><td>' + safeText(row.modulo || '—') + '</td><td>' + safeText(row.accion || row.tipo) + '</td><td>' + safeText(window.fmtF ? window.fmtF(row.fecha) : row.fecha) + '</td></tr>').join('') +
       (list.length ? '' : '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--muted)">Sin actividades.</td></tr>') + '</tbody></table>';
+    if (hadFocus) {
+      const nextSearch = $('logs-search');
+      if (nextSearch) {
+        nextSearch.focus();
+        try { nextSearch.setSelectionRange(selStart, selEnd); } catch (_) {}
+      }
+    }
   };
 
   // ── 10. Role-based admin panel visibility ───────────────────────────────────

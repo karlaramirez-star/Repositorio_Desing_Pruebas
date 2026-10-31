@@ -3468,6 +3468,7 @@ function calcAdoptionKPIs(filters){
     periodLabel: periodLabel,
     totalUsers: totalUsers, activeUsers: activeUsers, inactiveUsers: inactiveUsers,
     totalSessions: totalSessions, avgDur: avgDur,
+    scopeUserIds: usersInScope.map(function(u){ return u.id; }),
     kpiScore: kpiScore, trend: trend, prevScore: prevScore,
     smart: { meta: SMART_META, actual: kpiScore, cumplimiento: Math.min(cumplimiento,100) },
     userDetail: userDetail,

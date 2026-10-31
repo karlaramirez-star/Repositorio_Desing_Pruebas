@@ -421,9 +421,19 @@
   }
 
   async function processAuthSession(session) {
-    if (!session || !session.user) return;
-    const user = session.user;
-    if (authProcessing) return authProcessing;
+  if (!session || !session.user) return;
+  const user = session.user;
+
+  // Evita volver a procesar una sesión que ya fue cargada.
+  if (
+    currentSupabaseUser &&
+    currentSupabaseUser.id === user.id &&
+    lastLoadedUserId === user.id
+  ) {
+    return;
+  }
+
+  if (authProcessing) return authProcessing;
     authProcessing = (async () => {
       try {
         setAuthLoading(true);

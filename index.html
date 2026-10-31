@@ -3363,22 +3363,29 @@ function calcAdoptionKPIs(filters){
     default:           cutoff.setMonth(now.getMonth()-6);  periodLabel='Último semestre';  break;
   }
 
-  // Sessions from real logs (no simulation)
-  var rawSessions = (typeof ACADEMY_DATA !== 'undefined') ? ACADEMY_DATA.sessions : [];
-  var sessions = rawSessions.filter(function(s){
-    var dt = new Date(s.fecha);
-    if(dt < cutoff) return false;
-    if(filters.area !== 'all' && s.area !== filters.area) return false;
-    return true;
-  });
-
-  // Users in scope
+  // Users in scope (standard users only: Administrador role/area excluded)
+  function isAdminUser(u){
+    if(!u) return false;
+    if(u.area === 'Administrador') return true;
+    if(String(u.rol || '').toLowerCase() === 'administrador') return true;
+    return Array.isArray(u.roles) && u.roles.some(function(r){ return String(r).toLowerCase() === 'administrador'; });
+  }
   var usersInScope = USERS_DB.filter(function(u){
-    if(u.area === 'Administrador') return false;
+    if(isAdminUser(u)) return false;
     if(filters.area !== 'all' && u.area !== filters.area) return false;
     return true;
   });
   var totalUsers    = usersInScope.length;
+  var scopeById = {};
+  usersInScope.forEach(function(u){ scopeById[u.id] = u; });
+  function inScope(s){ return !!scopeById[s.userId]; }
+
+  // Sessions from real logs (no simulation) — only sessions of users in scope
+  var rawSessions = ((typeof ACADEMY_DATA !== 'undefined') ? ACADEMY_DATA.sessions : []).filter(inScope);
+  var sessions = rawSessions.filter(function(s){
+    return new Date(s.fecha) >= cutoff;
+  });
+
   var activeUserIds = sessions.map(function(s){ return s.userId; });
   var uniqueActive  = activeUserIds.filter(function(id,i){ return activeUserIds.indexOf(id)===i; });
   var activeUsers   = uniqueActive.length;
@@ -3400,8 +3407,7 @@ function calcAdoptionKPIs(filters){
   cutoff2.setMonth(cutoff2.getMonth()-6);
   var prevSessions = rawSessions.filter(function(s){
     var dt = new Date(s.fecha);
-    return dt >= cutoff2 && dt < cutoff
-      && (filters.area === 'all' || s.area === filters.area);
+    return dt >= cutoff2 && dt < cutoff;
   });
   var prevActive = prevSessions.map(function(s){ return s.userId; })
     .filter(function(id,i,arr){ return arr.indexOf(id)===i; }).length;
@@ -3426,12 +3432,13 @@ function calcAdoptionKPIs(filters){
   // Area ranking
   var areaMap = {};
   sessions.forEach(function(s){
-    if(!areaMap[s.area]) areaMap[s.area]={area:s.area,sessions:0,users:{}};
-    areaMap[s.area].sessions++;
-    areaMap[s.area].users[s.userId]=1;
+    var uArea = scopeById[s.userId].area;
+    if(!areaMap[uArea]) areaMap[uArea]={area:uArea,sessions:0,users:{}};
+    areaMap[uArea].sessions++;
+    areaMap[uArea].users[s.userId]=1;
   });
   var areaRanking = Object.values(areaMap).map(function(a){
-    var areaTotal = USERS_DB.filter(function(u){ return u.area===a.area&&u.area!=='Administrador'; }).length;
+    var areaTotal = usersInScope.filter(function(u){ return u.area===a.area; }).length;
     return {
       area: a.area, sessions: a.sessions,
       usuarios: Object.keys(a.users).length,
@@ -3446,7 +3453,7 @@ function calcAdoptionKPIs(filters){
     var mo2   = new Date(now.getFullYear(), now.getMonth()-m+1, 1);
     var moSes = rawSessions.filter(function(s){
       var dt=new Date(s.fecha);
-      return dt>=mo && dt<mo2 && (filters.area==='all'||s.area===filters.area);
+      return dt>=mo && dt<mo2;
     });
     var moActive = moSes.map(function(s){return s.userId;})
       .filter(function(id,i,arr){return arr.indexOf(id)===i;}).length;

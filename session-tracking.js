@@ -317,9 +317,24 @@
 
       existing.splice(0, existing.length, ...merged);
       installDurationKpiPatch();
+      refreshAdoptionIfVisible(merged);
     } catch (error) {
       logWarning('Error al actualizar los indicadores de duración:', error && error.message);
     }
+  }
+
+  // Re-render the Adoption dashboard once measured durations arrive, so the default
+  // "Todas las áreas" view does not stay with the values computed before the sync.
+  let lastDurationSignature = '';
+  function refreshAdoptionIfVisible(list) {
+    const signature = list.filter(function (entry) { return entry.measured; })
+      .map(function (entry) { return entry.trackedId + ':' + entry.durationSeconds; }).join('|');
+    if (signature === lastDurationSignature) return;
+    const section = document.getElementById('admin-sec-adopcion');
+    if (section && section.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
+    lastDurationSignature = signature;
+    if (!section || section.offsetParent === null || typeof window.renderAdminAdopcion !== 'function') return;
+    try { window.renderAdminAdopcion(); } catch (_) {}
   }
 
   function installDurationKpiPatch() {
@@ -341,12 +356,31 @@
       const cutoff = getPeriodCutoff(filters && filters.periodo);
       const area = filters && filters.area ? filters.area : 'all';
       const sessions = (window.ACADEMY_DATA && window.ACADEMY_DATA.sessions) || [];
+      // Same scope as calcAdoptionKPIs(): standard users only (admins excluded),
+      // filtered by the user's assigned department; 'all' = every standard user.
+      const scopeIds = {};
+      if (Array.isArray(kpi.scopeUserIds)) {
+        kpi.scopeUserIds.forEach(function (id) { scopeIds[id] = true; });
+      } else {
+        (window.USERS_DB || []).forEach(function (user) {
+          const isAdmin = user.area === 'Administrador'
+            || String(user.rol || '').toLowerCase() === 'administrador'
+            || (Array.isArray(user.roles) && user.roles.some(function (r) { return String(r).toLowerCase() === 'administrador'; }));
+          if (!isAdmin && (area === 'all' || user.area === area)) scopeIds[user.id] = true;
+        });
+      }
+      const seenTracked = {};
       const measured = sessions.filter(function (session) {
         const date = new Date(session.fecha);
-        return session.measured === true
-          && Number(session.durationSeconds) > 0
-          && date >= cutoff
-          && (area === 'all' || session.area === area);
+        if (session.measured !== true
+          || !(Number(session.durationSeconds) > 0)
+          || !(date >= cutoff)
+          || !scopeIds[session.userId]) return false;
+        // Never count the same tracked session twice.
+        const key = session.trackedId != null ? String(session.trackedId) : 'local-' + session.id;
+        if (seenTracked[key]) return false;
+        seenTracked[key] = true;
+        return true;
       });
 
       kpi.avgDur = measured.length

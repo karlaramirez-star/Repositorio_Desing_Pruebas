@@ -2372,10 +2372,14 @@ function renderAdminAllAreas(){var e=document.getElementById("area-tpl-container
    ════════════════════════════════════════════════════════════ */
 
 // ── Proxy URL — cambia esto a tu función serverless desplegada ──
-var MAIL_PROXY_URL = '/.netlify/functions/sendmail';
-// Vercel: '/api/sendmail'
-// URL absoluta si el proxy está en otro dominio:
-// var MAIL_PROXY_URL = 'https://tu-backend.com/api/sendmail';
+var MAIL_PROXY_URL = 'https://enchanting-unicorn-63d51b.netlify.app/.netlify/functions/sendmail';
+
+// El proxy se considera configurado cuando es una URL HTTPS absoluta real
+// (no la ruta relativa por defecto ni un ejemplo de documentación).
+function _isMailProxyConfigured() {
+  var url = String(window.MAIL_PROXY_URL || '');
+  return /^https:\/\/[^\s\/]+\/\S+$/.test(url) && url.indexOf('tu-backend') === -1;
+}
 
 // ── Deduplicación: evita enviar la misma notificación dos veces ──
 var _sentNotifKeys = {};
@@ -2422,33 +2426,63 @@ function _callMailProxy(subject, htmlBody, emails, callback) {
     return;
   }
 
+  if(!_isMailProxyConfigured()) {
+    callback({ok:false, code:0, msg:'El servicio de correo no está configurado (MAIL_PROXY_URL).'});
+    return;
+  }
+  var sb = window.motumSupabase;
+  if(!sb || !sb.auth || typeof sb.auth.getSession !== 'function') {
+    callback({ok:false, code:0, msg:'No está disponible la sesión de Supabase. Recarga la página e inicia sesión nuevamente.'});
+    return;
+  }
+
+  // Cuerpo esperado por functions/sendmail.js: { subject, textMail, emails }
   var body = JSON.stringify({ subject: subject, textMail: htmlBody, emails: uniqueEmails });
 
-  fetch(MAIL_PROXY_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    body
-  })
-  .then(function(res) {
-    var status = res.status;
-    return res.text().then(function(txt) {
-      var json = null;
-      try { json = JSON.parse(txt); } catch(e) {}
-      if(status >= 200 && status < 300) {
-        callback({ok:true,  code:status, msg:'Solicitud aceptada por la API.', data:json, emails:uniqueEmails});
-      } else if(status === 401 || status === 403) {
-        callback({ok:false, code:status, msg:'Error de autenticación (' + status + '): credenciales inválidas o sin permisos.', data:json});
-      } else if(status === 400 || status === 422) {
-        callback({ok:false, code:status, msg:'Error de validación (' + status + '): ' + (json && json.message ? json.message : txt.slice(0,200)), data:json});
-      } else if(status >= 500) {
-        callback({ok:false, code:status, msg:'Error del servidor (' + status + '). Intenta de nuevo más tarde.', data:json});
-      } else {
-        callback({ok:false, code:status, msg:'Respuesta inesperada (' + status + ').', data:json});
-      }
+  function serverMsg(json, txt) {
+    return (json && (json.error || json.message || json.msg)) || String(txt || '').slice(0, 200);
+  }
+
+  sb.auth.getSession()
+  .then(function(result) {
+    var session = result && result.data ? result.data.session : null;
+    var token = session && session.access_token;
+    if(result && result.error) throw result.error;
+    if(!token) {
+      callback({ok:false, code:401, msg:'Tu sesión expiró o no está activa. Inicia sesión nuevamente.'});
+      return;
+    }
+    return fetch(MAIL_PROXY_URL, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body:    body
+    })
+    .then(function(res) {
+      var status = res.status;
+      return res.text().then(function(txt) {
+        var json = null;
+        try { json = JSON.parse(txt); } catch(e) {}
+        if(status >= 200 && status < 300) {
+          callback({ok:true,  code:status, msg:'Solicitud aceptada por la API.', data:json, emails:uniqueEmails});
+        } else if(status === 401) {
+          callback({ok:false, code:status, msg:'Sesión no válida o expirada (401): ' + (serverMsg(json, txt) || 'inicia sesión nuevamente.'), data:json});
+        } else if(status === 403) {
+          callback({ok:false, code:status, msg:'Sin autorización (403): ' + (serverMsg(json, txt) || 'tu cuenta no puede enviar notificaciones.'), data:json});
+        } else if(status === 400 || status === 422) {
+          callback({ok:false, code:status, msg:'Error de validación (' + status + '): ' + serverMsg(json, txt), data:json});
+        } else if(status >= 500) {
+          callback({ok:false, code:status, msg:'Error del servidor (' + status + '): ' + (serverMsg(json, txt) || 'intenta de nuevo más tarde.'), data:json});
+        } else {
+          callback({ok:false, code:status, msg:'Respuesta inesperada (' + status + ').', data:json});
+        }
+      });
     });
   })
   .catch(function(err) {
-    callback({ok:false, code:0, msg:'Error de comunicación: ' + (err.message||'Sin conexión o proxy no disponible.')});
+    callback({ok:false, code:0, msg:'Error de comunicación: ' + ((err && err.message) || 'Sin conexión o servicio de correo no disponible.')});
   });
 }
 
@@ -2891,12 +2925,12 @@ function renderAdminNotificaciones(){
 
   sec.innerHTML =
     // ── Config notice ──────────────────────────────────────────────
-    '<div class="notif-config-note">'
+    (_isMailProxyConfigured() ? '' : '<div class="notif-config-note">'
     + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
     + '<div><strong>Configuración requerida:</strong> Las notificaciones por correo requieren un proxy serverless con la clave API segura. '
     + 'Configura <code>MAIL_PROXY_URL</code> y despliega la función <code>/functions/sendmail.js</code> antes de usar envíos reales. '
     + 'La sección de prueba permite verificar la conexión antes de activar los envíos automáticos.</div>'
-    + '</div>'
+    + '</div>')
 
     // ── Stats ──────────────────────────────────────────────────────
     + '<div class="stats-row">'
@@ -3011,7 +3045,7 @@ function runMailTest() {
       else if(res.code>=500) errType = ' — Error del servidor';
       else if(res.code===0) errType = ' — Error de comunicación';
       result.innerHTML = '<strong>⚠ ' + (res.code||'Sin código') + errType + '</strong><br/>' + res.msg
-        + (MAIL_PROXY_URL.includes('netlify') || MAIL_PROXY_URL.includes('api/') ? '' :
+        + (_isMailProxyConfigured() ? '' :
            '<br/><span style="font-size:11px">Verifica que MAIL_PROXY_URL esté configurado y la función esté desplegada.</span>');
     }
   });

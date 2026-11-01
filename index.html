@@ -3240,30 +3240,42 @@ function renderAdminAreas(){var e=AREAS.map(function(e){var a=plantillas.filter(
     }
   })(),document.getElementById("crud-err").style.display="none",document.getElementById("crud-modal").classList.remove("hidden");
   // Cascade: update categories when area changes
-  var _catsMap={};CATEGORIES_DATA.forEach(function(c){if(c.areaId&&(c.modulo==="plantillas"||c.modulo==="ambos")){if(!_catsMap[c.areaId])_catsMap[c.areaId]=[];if(_catsMap[c.areaId].indexOf(c.nombre)===-1)_catsMap[c.areaId].push(c.nombre);}});
+  // Categorías de Plantillas (módulo "plantillas" o "ambos"): globales (areaId = null)
+  // más las específicas de las áreas seleccionadas, sin duplicados.
+  var _catsGlobal=[],_catsMap={};
+  CATEGORIES_DATA.forEach(function(c){
+    if(!c||!c.nombre||(c.modulo!=="plantillas"&&c.modulo!=="ambos"))return;
+    var list=c.areaId?(_catsMap[c.areaId]=_catsMap[c.areaId]||[]):_catsGlobal;
+    if(list.indexOf(c.nombre)===-1)list.push(c.nombre);
+  });
+  // En edición, categoría actual a conservar mientras siga siendo válida.
+  var _catInitial=a&&a.categoria?a.categoria:"";
+  function _escCat(v){return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
   function _updateCatOpts(){
-    var areaId=parseInt((document.getElementById("crud-area").value||"").split(",")[0])||0;
+    var areaIds=(document.getElementById("crud-area").value||"").split(",").map(function(v){return parseInt(v)||0;}).filter(Boolean);
     var catSel=document.getElementById("crud-cat");
-    if(!areaId){
+    if(!areaIds.length){
       catSel.innerHTML='<option value="">— Selecciona primero un área —</option>';
       catSel.disabled=true;
       return;
     }
-    var cats=_catsMap[areaId]||[];
+    var cats=_catsGlobal.slice();
+    areaIds.forEach(function(id){(_catsMap[id]||[]).forEach(function(n){if(cats.indexOf(n)===-1)cats.push(n);});});
     catSel.disabled=false;
     if(cats.length===0){
       catSel.innerHTML='<option value="">No existen categorías para esta área</option>';
       catSel.disabled=true;
       return;
     }
-    var curVal=catSel.value;
+    var curVal=catSel.value||_catInitial;
+    _catInitial="";
     catSel.innerHTML='<option value="">Selecciona una categoría</option>'
-      +cats.map(function(c){return'<option value="'+c+'"'+(c===curVal?' selected':'')+'>'+c+'</option>';}).join("");
+      +cats.map(function(c){return'<option value="'+_escCat(c)+'">'+_escCat(c)+'</option>';}).join("");
+    catSel.value=cats.indexOf(curVal)!==-1?curVal:"";
     catSel.style.color='';
   }
   var _areaEl=document.getElementById("crud-area");
   _areaEl.onchange=function(){
-    document.getElementById("crud-cat").value='';
     _updateCatOpts();
   };
   window._updateCatOpts=_updateCatOpts;

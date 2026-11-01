@@ -696,6 +696,8 @@
     if (typeof legacyOpenPlantillaModal === 'function') legacyOpenPlantillaModal(id);
     const input = $('crud-cat');
     if (!input) return;
+    // The modal's cascade (global + selected-area categories) is the single source of options.
+    if (typeof window._updateCatOpts === 'function') { window._updateCatOpts(); return; }
     const selected = input.value;
     const categories = (window.CATEGORIES_DATA || []).filter((cat) => cat.modulo === 'plantillas' || cat.modulo === 'ambos');
     const unique = [...new Map(categories.map((cat) => [cat.nombre, cat])).values()];

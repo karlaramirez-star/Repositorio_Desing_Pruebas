@@ -528,8 +528,13 @@
 
   window.renderAdminUsers = function renderAdminUsers() {
     const sec = $('admin-sec-users'); if (!sec) return;
+    // Keep focus and cursor position in the search box across re-renders.
+    const prevSearch = $('users-search');
+    const hadFocus = !!prevSearch && document.activeElement === prevSearch;
+    const selStart = hadFocus ? prevSearch.selectionStart : null;
+    const selEnd = hadFocus ? prevSearch.selectionEnd : null;
     const term = String(window.usersSearch || '').toLowerCase();
-    const list = (window.USERS_DB || []).filter((u) => [u.nombre,u.email,u.area,u.rol].join(' ').toLowerCase().includes(term));
+    const list = (window.USERS_DB || []).filter((u) => [u.nombre,u.email,u.area,(u.areas || []).join(' '),u.rol].join(' ').toLowerCase().includes(term));
     const rows = list.map((u) => '<tr>' +
       '<td><div class="td-name">' + safeText(u.nombre) + '</div></td>' +
       '<td style="color:var(--muted);font-size:12px">' + safeText(u.email) + '</td>' +
@@ -543,11 +548,18 @@
       '<div class="stat-card"><div class="stat-label">Activos</div><div class="stat-val">' + (window.USERS_DB || []).filter((u) => u.activo).length + '</div></div>' +
       '<div class="stat-card"><div class="stat-label">Áreas cubiertas</div><div class="stat-val">' + new Set((window.USERS_DB || []).flatMap((u) => u.areas || [u.area])).size + '</div></div></div>' +
       '<div class="section-head"><div style="display:flex;align-items:center;gap:10px"><h2>Usuarios registrados</h2>' +
-      '<input value="' + safeText(window.usersSearch || '') + '" oninput="usersSearch=this.value;renderAdminUsers()" placeholder="Buscar usuario..." style="width:210px;font-size:13px"/></div>' +
+      '<input id="users-search" value="' + safeText(window.usersSearch || '') + '" oninput="window.usersSearch=this.value;renderAdminUsers()" placeholder="Buscar usuario..." style="width:210px;font-size:13px"/></div>' +
       '<button class="btn-primary btn-sm" onclick="openUserModal(null)">＋ Añadir usuario</button></div>' +
       '<table><thead><tr><th>Nombre</th><th>Correo</th><th>Departamento</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--muted)">Sin usuarios registrados.</td></tr>') + '</tbody></table>' +
       '<p style="margin-top:12px;font-size:11px;color:var(--muted)">Los usuarios nuevos reciben una invitación por correo. Deben iniciar sesión con su cuenta Google corporativa.</p>';
+    if (hadFocus) {
+      const nextSearch = $('users-search');
+      if (nextSearch) {
+        nextSearch.focus();
+        try { nextSearch.setSelectionRange(selStart, selEnd); } catch (_) {}
+      }
+    }
   };
 
   window.openUserModal = function openUserModal(id) {

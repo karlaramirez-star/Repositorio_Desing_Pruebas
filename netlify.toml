@@ -3,3 +3,10 @@
 
 [functions]
   directory = "functions"
+
+# Solo para Deploy Previews: publica la plataforma (no la página del servicio
+# de notificaciones). La carpeta se genera en el build copiando los archivos
+# de la raíz; producción sigue usando [build] publish = "netlify-public".
+[context.deploy-preview]
+  command = "rm -rf preview-public && mkdir -p preview-public && cp index.html supabase-integration.js session-tracking.js preview-public/"
+  publish = "preview-public"

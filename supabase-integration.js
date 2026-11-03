@@ -14,6 +14,11 @@
   const SUPABASE_AVATAR_BUCKET = 'avatars';
   const CORPORATE_DOMAIN = 'tecnomotum.com';
   const ADMIN_INVITE_FUNCTION = 'admin-invite-user';
+  // Correos automáticos al publicar (nueva plantilla, plantilla actualizada y nuevo
+  // contenido digital). Desactivados durante las pruebas del servicio de correo; la
+  // «Prueba de Envío de Correo» manual sigue funcionando. Cambiar a true para reactivarlos.
+  const AUTO_EMAIL_NOTIFICATIONS_ENABLED = false;
+  const AUTO_EMAIL_TYPES = ['nueva_plantilla', 'actualiza_plantilla', 'nuevo_contenido'];
 
   let sbClient = null;
   let currentSupabaseUser = null;
@@ -1058,6 +1063,10 @@
   };
 
   window.sendEmailNotification = async function sendEmailNotification(type, payload) {
+    if (!AUTO_EMAIL_NOTIFICATIONS_ENABLED && AUTO_EMAIL_TYPES.includes(type)) {
+      console.info('[Motum] Correo automático desactivado temporalmente (' + type + '). No se envió notificación.');
+      return null;
+    }
     if (!isAdmin()) {
       showMessage('El envío de notificaciones generales por correo está reservado al Administrador.', 'info');
       return null;

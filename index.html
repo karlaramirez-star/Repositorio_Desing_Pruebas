@@ -2371,8 +2371,17 @@ function renderAdminAllAreas(){var e=document.getElementById("area-tpl-container
    3. Cambia MAIL_PROXY_URL por la URL de tu función desplegada.
    ════════════════════════════════════════════════════════════ */
 
-// ── Proxy URL — cambia esto a tu función serverless desplegada ──
-var MAIL_PROXY_URL = 'https://enchanting-unicorn-63d51b.netlify.app/.netlify/functions/sendmail';
+// ── Proxy URL ──
+// Producción (GitHub Pages) usa la función estable de Netlify. Un Deploy Preview de
+// este sitio usa la función de su mismo despliegue, para probar cambios antes de fusionar.
+var MAIL_PROXY_STABLE_URL = 'https://enchanting-unicorn-63d51b.netlify.app/.netlify/functions/sendmail';
+var MAIL_PROXY_PREVIEW_ORIGIN = /^https:\/\/deploy-preview-\d+--enchanting-unicorn-63d51b\.netlify\.app$/;
+function _resolveMailProxyUrl(origin) {
+  return MAIL_PROXY_PREVIEW_ORIGIN.test(String(origin || ''))
+    ? String(origin) + '/.netlify/functions/sendmail'
+    : MAIL_PROXY_STABLE_URL;
+}
+var MAIL_PROXY_URL = _resolveMailProxyUrl(window.location.origin);
 
 // El proxy se considera configurado cuando es una URL HTTPS absoluta real
 // (no la ruta relativa por defecto ni un ejemplo de documentación).

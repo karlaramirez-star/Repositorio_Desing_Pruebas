@@ -91,7 +91,8 @@ Deno.serve(async (req: Request) => {
   const targetUserId = String(body.user_id || '').trim()
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
-    return json(400, { error: 'El identificador del usuario no es válido.' 
+    return json(400, { error: 'El identificador del usuario no es válido.' })
+  }
 
 // Protección temporal: solo permite eliminar la cuenta
 // de prueba expresamente autorizada.

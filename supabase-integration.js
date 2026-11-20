@@ -547,7 +547,12 @@
       '<td><span class="badge" style="background:#f0f9ff;color:#0369a1">' + safeText(u.rol || 'Usuario') + '</span></td>' +
       '<td><span class="badge" style="background:' + (u.activo ? '#dcfce7' : '#f1f5f9') + ';color:' + (u.activo ? '#16a34a' : '#64748b') + '">' + (u.activo ? 'Activo' : 'Inactivo') + '</span></td>' +
       '<td><div class="row-actions"><button class="icon-btn" title="Editar" onclick="openUserModal(' + u.id + ')">&#9998;</button>' +
-      '<button class="icon-btn danger" title="Desactivar" onclick="deleteUser(' + u.id + ')">&#10005;</button></div></td></tr>').join('');
+     
+      '<button class="icon-btn" title="Desactivar" onclick="deleteUser(' + u.id + ')">&#10005;</button>' +
+      (isAdmin() && u.authUserId !== currentUserId()
+        ? '<button class="icon-btn danger" title="Eliminar definitivamente" onclick="permanentlyDeleteUser(' + u.id + ')">&#128465;</button>'
+        : '') + '</div></td></tr>').join('');
+
     sec.innerHTML = '<div class="stats-row" style="grid-template-columns:repeat(3,1fr)">' +
       '<div class="stat-card"><div class="stat-label">Total usuarios</div><div class="stat-val">' + (window.USERS_DB || []).length + '</div></div>' +
       '<div class="stat-card"><div class="stat-label">Activos</div><div class="stat-val">' + (window.USERS_DB || []).filter((u) => u.activo).length + '</div></div>' +
@@ -654,16 +659,117 @@
     }
   };
 
+  
   window.deleteUser = async function deleteUser(id) {
     const user = (window.USERS_DB || []).find((item) => item.id === id);
     if (!user || !user.authUserId) return;
+
     if (!confirm('¿Desactivar el acceso de ' + user.nombre + '?')) return;
-    const { error } = await ensureClient().from('perfiles').update({ activo: false, updated_at: new Date().toISOString() }).eq('id', user.authUserId);
-    if (error) { showMessage('No se pudo desactivar el usuario: ' + error.message, 'error'); return; }
-    await loadApplicationData({ isAdmin: isAdmin() });
-    window.renderAdminUsers();
-    await writeActivity('Usuarios', 'Desactivación', 'Se desactivó el usuario ' + user.email, {});
-    showMessage('Usuario desactivado.', 'success');
+
+    try {
+      const { error } = await ensureClient()
+        .from('perfiles')
+        .update({
+          activo: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.authUserId);
+
+      if (error) throw error;
+
+      await loadApplicationData({ isAdmin: isAdmin() });
+      window.renderAdminUsers();
+
+      await writeActivity(
+        'Usuarios',
+        'Desactivación',
+        'Se desactivó el usuario ' + user.email,
+        {}
+      );
+
+      showMessage('Usuario desactivado.', 'success');
+
+    } catch (error) {
+      showMessage('No se pudo desactivar el usuario: ' + error.message, 'error');
+    }
+  };
+
+  window.permanentlyDeleteUser = async function permanentlyDeleteUser(id) {
+    const user = (window.USERS_DB || []).find((item) => item.id === id);
+
+    if (!isAdmin()) {
+      showMessage('Solo un Administrador puede eliminar usuarios.', 'error');
+      return;
+    }
+
+    if (!user || !user.authUserId) {
+      showMessage('No se encontró el identificador del usuario.', 'error');
+      return;
+    }
+
+    if (user.authUserId === currentUserId()) {
+      showMessage('No puedes eliminar tu propia cuenta.', 'error');
+      return;
+    }
+
+    if (!confirm(
+      'Vas a eliminar definitivamente la cuenta de ' +
+      user.nombre + ' (' + user.email +
+      '). Esta acción no se puede deshacer. ¿Deseas continuar?'
+    )) return;
+
+    const typedEmail = window.prompt(
+      'Para confirmar la eliminación, escribe exactamente el correo del usuario:\n' +
+      user.email
+    );
+
+    if (typedEmail == null) return;
+
+    if (typedEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
+      showMessage('El correo no coincide. No se eliminó el usuario.', 'error');
+      return;
+    }
+
+    try {
+      const { data, error } = await ensureClient().functions.invoke(
+        'admin-delete-user',
+        {
+          body: { user_id: user.authUserId }
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message || 'No se pudo ejecutar la eliminación.');
+      }
+
+      if (!data || !data.ok) {
+        throw new Error(
+          data?.error || 'Supabase no confirmó la eliminación.'
+        );
+      }
+
+      await loadApplicationData({ isAdmin: isAdmin() });
+      window.renderAdminUsers();
+
+      await writeActivity(
+        'Usuarios',
+        'Eliminación definitiva',
+        'Se eliminó la cuenta de ' + user.email,
+        { usuario_id: user.authUserId }
+      );
+
+      showMessage(
+        'El usuario ' + user.email + ' fue eliminado definitivamente.',
+        'success'
+      );
+
+    } catch (error) {
+      console.error('Error al eliminar usuario:', error);
+      showMessage(
+        'No se pudo eliminar el usuario: ' + error.message,
+        'error'
+      );
+    }
   };
 
   window.bulkUploadUsers = async function bulkUploadUsers(input) {
